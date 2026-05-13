@@ -7,7 +7,7 @@ Build a wallet service that owns customer balances for a logistics platform and 
 - Every successful money movement is recorded in an immutable ledger.
 - A `deduct` request from `Order Service` must be idempotent.
 
-The implementation for this submission runs in-memory, but the architecture is intentionally shaped so it can evolve to a transactional database without changing business logic.
+The current runtime runs in-memory, but the architecture is intentionally shaped so it can evolve to a transactional database without changing business logic.
 
 ## 2. Scope
 In scope:
@@ -31,15 +31,36 @@ The wallet service is called by frontend-facing clients for top-up and read oper
 
 ```mermaid
 flowchart LR
-CustomerClient --> APIGateway
-OrderService --> APIGateway
-APIGateway --> WalletService
-WalletService --> InMemoryState
-WalletService --> MetricsBackend
-WalletService --> KafkaBroker
+CustomerClient[Customer App / Admin Tool] -->|Create wallet, top-up, read balance| WalletService
+OrderService[Order Service] -->|Deduct funds before order confirmation| WalletService
+WalletService --> WalletStore[(Wallet Store)]
+WalletService --> LedgerStore[(Transaction Ledger)]
+WalletService --> IdempotencyStore[(Idempotency Store)]
+WalletService -.-> MetricsBackend[Metrics Backend]
+WalletService -.-> EventStream[Kafka / Event Bus]
 ```
 
-For this exercise, `MetricsBackend` and `KafkaBroker` are placeholders behind interfaces. The service remains runnable without them.
+In the current runtime, the three stores are backed by in-memory adapters. The design keeps them behind ports so they can later move to a relational database without changing API or business logic.
+
+### 3.1 Service-to-Service Order Placement View
+The most important cross-service interaction is `Order Service -> Wallet Service` during order placement.
+
+```mermaid
+flowchart LR
+Customer[Customer] --> OrderAPI[Order Service API]
+OrderAPI --> OrderService[Order Service]
+OrderService -->|POST /wallets/{walletId}/deduct| WalletAPI[Wallet Service API]
+WalletAPI --> WalletApp[Wallet Application Service]
+WalletApp --> WalletState[(Wallet Balance)]
+WalletApp --> Idem[(Idempotency Record)]
+WalletApp --> Ledger[(Ledger Entry)]
+WalletApp --> Decision{Deduct accepted?}
+Decision -->|Yes| OrderService
+Decision -->|No| OrderService
+OrderService -->|Confirm or reject order| Customer
+```
+
+This interaction needs a deterministic wallet response because `Order Service` may retry on timeouts, transient failures, or uncertain delivery. The wallet service therefore combines idempotency and balance checks in the same mutation boundary.
 
 ## 4. Functional Requirements
 Required APIs:
@@ -82,16 +103,21 @@ WalletResource --> WalletApplicationService
 WalletApplicationService --> WalletRepository
 WalletApplicationService --> TransactionRepository
 WalletApplicationService --> IdempotencyRepository
+WalletApplicationService --> WalletMutationExecutor
 WalletApplicationService --> MetricsPort
 WalletApplicationService --> EventPublisher
 WalletRepository --> InMemoryAdapters
 WalletRepository --> HibernateAdapters
+TransactionRepository --> InMemoryAdapters
+TransactionRepository --> HibernateAdapters
+IdempotencyRepository --> InMemoryAdapters
+IdempotencyRepository --> HibernateAdapters
 ```
 
 ## 7. Core Design Decisions
 ### 7.1 In-memory first, database-ready shape
 The runnable version uses in-memory state because:
-- it keeps the submission self-contained
+- it keeps the service easy to run locally
 - correctness is easier to demonstrate
 - tests run fast
 
@@ -241,6 +267,35 @@ For multi-node deployment:
 - externalize metrics and tracing
 - add tenant-aware auth and rate limiting
 
+### Target production deployment view
+The longer-term production shape is a service-to-service deployment with a shared transactional database for wallet state, plus asynchronous event publication for downstream consumers.
+
+```mermaid
+flowchart LR
+Customer[Customer] --> Client[Customer App]
+Client --> OrderAPI[Order Service API]
+OrderAPI --> OrderService[Order Service]
+OrderService -->|POST /wallets/{walletId}/deduct| WalletAPI[Wallet Service API]
+WalletAPI --> WalletService[Wallet Service]
+
+WalletService --> Postgres[(PostgreSQL / Wallet DB)]
+Postgres --> WalletTable[(wallets)]
+Postgres --> LedgerTable[(wallet_transactions)]
+Postgres --> IdemTable[(deduction_idempotency)]
+Postgres --> OutboxTable[(outbox)]
+
+WalletService -. writes event intent .-> OutboxTable
+OutboxTable --> OutboxRelay[Outbox Relay / CDC]
+OutboxRelay --> Kafka[Kafka / Event Bus]
+
+WalletService -. metrics / traces .-> Observability[Metrics / Tracing Backend]
+OrderService -. metrics / traces .-> Observability
+
+Kafka --> Downstream[Reporting / Notifications / Audit Consumers]
+```
+
+This shape keeps the wallet mutation path strongly consistent inside one database transaction, while still allowing asynchronous integration with downstream systems. `Order Service` remains synchronously coupled only to the wallet debit decision, not to event delivery.
+
 ## 11. Failure Handling Strategy
 - Validation failures return `400`
 - Unauthorized requests return `401`
@@ -266,7 +321,7 @@ The code will expose extension points for:
   - `WalletDeducted`
   - `WalletDeductionRejected`
 
-Default implementations are no-op so the submission stays lightweight.
+Default implementations are no-op so the current runtime stays lightweight while preserving production-oriented extension points.
 
 ## 13. Trade-offs
 - Keeping current balance on the wallet object improves read performance, but duplicates data derivable from the ledger.
@@ -274,9 +329,3 @@ Default implementations are no-op so the submission stays lightweight.
 - Lightweight auth proves system thinking and avoids trusting request customer IDs, but it is still not full production security.
 - Per-wallet locking is correct on one node, but does not solve distributed concurrency by itself.
 
-## 14. Deliverable Mapping
-- HLD: this document
-- LLD: class-level design, API contracts, concurrency model
-- Implementation: Dropwizard service with in-memory adapters and Hibernate-ready abstractions
-- Tests: service, resource, and concurrency tests
-- README: runbook, trade-offs, and extension roadmap
