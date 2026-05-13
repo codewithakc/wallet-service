@@ -190,15 +190,6 @@ Usage:
 
 This script behaves more like a mock `Order Service`: it places orders by calling `/wallets/{id}/deduct`, interprets the HTTP result, and shows which orders were accepted or rejected.
 
-## Timestamp format
-All API timestamps are returned as ISO-8601 UTC strings, for example:
-
-```json
-"createdAt": "2026-05-13T08:10:36.211669Z"
-```
-
-This is easier for clients to read and safer than exposing fractional epoch seconds as JSON numbers.
-
 ## Full flow stub
 A broader end-to-end smoke script is available at [`examples/full-flow-stub.sh`](examples/full-flow-stub.sh).
 
