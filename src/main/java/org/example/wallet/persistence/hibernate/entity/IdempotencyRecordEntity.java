@@ -25,6 +25,9 @@ public class IdempotencyRecordEntity {
     @Column(name = "idempotency_key", nullable = false, updatable = false)
     private String idempotencyKey;
 
+    @Column(name = "requested_amount", nullable = false)
+    private long requestedAmount;
+
     @Column(name = "status", nullable = false)
     private String status;
 
@@ -57,6 +60,14 @@ public class IdempotencyRecordEntity {
 
     public void setIdempotencyKey(String idempotencyKey) {
         this.idempotencyKey = idempotencyKey;
+    }
+
+    public long getRequestedAmount() {
+        return requestedAmount;
+    }
+
+    public void setRequestedAmount(long requestedAmount) {
+        this.requestedAmount = requestedAmount;
     }
 
     public String getStatus() {

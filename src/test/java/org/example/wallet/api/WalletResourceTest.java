@@ -47,8 +47,7 @@ class WalletResourceTest {
                     new InMemoryIdempotencyRepository(),
                     new InMemoryWalletMutationExecutor(),
                     new NoOpMetricsPort(),
-                    new NoOpEventPublisher(),
-                    100L)))
+                    new NoOpEventPublisher())))
             .build();
 
     @Test
@@ -85,7 +84,7 @@ class WalletResourceTest {
         Response response = RESOURCES.target("/wallets/" + wallet.walletId() + "/deduct")
                 .request()
                 .header(HttpHeaders.AUTHORIZATION, CUSTOMER_AUTH)
-                .post(Entity.entity(new DeductRequest("order-api-1", "order-api-1"), MediaType.APPLICATION_JSON_TYPE));
+                .post(Entity.entity(new DeductRequest("order-api-1", 100, "order-api-1"), MediaType.APPLICATION_JSON_TYPE));
 
         assertEquals(403, response.getStatus());
         ErrorResponse error = response.readEntity(ErrorResponse.class);
@@ -113,7 +112,7 @@ class WalletResourceTest {
         Response response = RESOURCES.target("/wallets/" + wallet.walletId() + "/deduct")
                 .request()
                 .header(HttpHeaders.AUTHORIZATION, ORDER_AUTH)
-                .post(Entity.entity(new DeductRequest("order-api-2", "order-api-2"), MediaType.APPLICATION_JSON_TYPE));
+                .post(Entity.entity(new DeductRequest("order-api-2", 100, "order-api-2"), MediaType.APPLICATION_JSON_TYPE));
 
         assertEquals(200, response.getStatus());
         DeductResponse body = response.readEntity(DeductResponse.class);
@@ -125,6 +124,26 @@ class WalletResourceTest {
                 .header(HttpHeaders.AUTHORIZATION, ORDER_AUTH)
                 .get(BalanceResponse.class);
         assertEquals(200, balanceResponse.balance());
+    }
+
+    @Test
+    void deductShouldRejectIdempotencyKeyReuseWithDifferentAmount() {
+        WalletResponse wallet = createWallet(300);
+
+        Response firstResponse = RESOURCES.target("/wallets/" + wallet.walletId() + "/deduct")
+                .request()
+                .header(HttpHeaders.AUTHORIZATION, ORDER_AUTH)
+                .post(Entity.entity(new DeductRequest("order-api-3", 100, "order-api-3"), MediaType.APPLICATION_JSON_TYPE));
+        assertEquals(200, firstResponse.getStatus());
+
+        Response secondResponse = RESOURCES.target("/wallets/" + wallet.walletId() + "/deduct")
+                .request()
+                .header(HttpHeaders.AUTHORIZATION, ORDER_AUTH)
+                .post(Entity.entity(new DeductRequest("order-api-3", 125, "order-api-3-retry"), MediaType.APPLICATION_JSON_TYPE));
+
+        assertEquals(409, secondResponse.getStatus());
+        ErrorResponse error = secondResponse.readEntity(ErrorResponse.class);
+        assertEquals("IDEMPOTENCY_CONFLICT", error.errorCode());
     }
 
     @Test

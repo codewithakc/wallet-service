@@ -4,6 +4,7 @@ import org.example.wallet.domain.DeductionResult;
 import org.example.wallet.domain.DeductionStatus;
 import org.example.wallet.domain.TopupResult;
 import org.example.wallet.domain.Wallet;
+import org.example.wallet.error.IdempotencyConflictException;
 import org.example.wallet.error.WalletNotFoundException;
 import org.example.wallet.events.NoOpEventPublisher;
 import org.example.wallet.metrics.NoOpMetricsPort;
@@ -25,8 +26,7 @@ class WalletApplicationServiceTest {
             new InMemoryIdempotencyRepository(),
             new InMemoryWalletMutationExecutor(),
             new NoOpMetricsPort(),
-            new NoOpEventPublisher(),
-            100L);
+            new NoOpEventPublisher());
 
     @Test
     void createWalletAndTopupShouldUpdateBalance() {
@@ -43,8 +43,8 @@ class WalletApplicationServiceTest {
     void deductShouldSucceedOnceAndReplayAfterThat() {
         Wallet wallet = service.createWallet("cust-1", 300);
 
-        DeductionResult first = service.deduct(wallet.getWalletId(), "order-1", "order-1");
-        DeductionResult replay = service.deduct(wallet.getWalletId(), "order-1", "order-1");
+        DeductionResult first = service.deduct(wallet.getWalletId(), "order-1", 100, "order-1");
+        DeductionResult replay = service.deduct(wallet.getWalletId(), "order-1", 100, "order-1");
 
         assertEquals(DeductionStatus.SUCCESS, first.status());
         assertFalse(first.servedFromIdempotencyCache());
@@ -61,7 +61,7 @@ class WalletApplicationServiceTest {
     void deductShouldRejectWhenBalanceIsInsufficient() {
         Wallet wallet = service.createWallet("cust-1", 50);
 
-        DeductionResult result = service.deduct(wallet.getWalletId(), "order-2", "order-2");
+        DeductionResult result = service.deduct(wallet.getWalletId(), "order-2", 100, "order-2");
 
         assertEquals(DeductionStatus.REJECTED, result.status());
         assertEquals("INSUFFICIENT_BALANCE", result.errorCode());
@@ -72,5 +72,16 @@ class WalletApplicationServiceTest {
     @Test
     void getBalanceShouldFailForUnknownWallet() {
         assertThrows(WalletNotFoundException.class, () -> service.getBalance("missing-wallet"));
+    }
+
+    @Test
+    void deductShouldRejectIdempotencyKeyReuseWithDifferentAmount() {
+        Wallet wallet = service.createWallet("cust-1", 300);
+
+        service.deduct(wallet.getWalletId(), "order-3", 100, "order-3");
+
+        assertThrows(
+                IdempotencyConflictException.class,
+                () -> service.deduct(wallet.getWalletId(), "order-3", 125, "order-3-retry"));
     }
 }

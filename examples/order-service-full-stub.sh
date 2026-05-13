@@ -115,10 +115,12 @@ setup_wallet() {
 place_order() {
   local wallet_id="$1"
   local order_id="$2"
-  local reference_id="$3"
+  local amount="$3"
+  local reference_id="$4"
 
   api_call_with_status "POST" "/wallets/${wallet_id}/deduct" "${ORDER_SERVICE_TOKEN}" "{
     \"idempotencyKey\": \"${order_id}\",
+    \"amount\": ${amount},
     \"referenceId\": \"${reference_id}\"
   }"
 }
@@ -136,14 +138,15 @@ get_transactions() {
 concurrent_same_order_retry() {
   local wallet_id="$1"
   local order_id="$2"
-  local parallelism="$3"
+  local amount="$3"
+  local parallelism="$4"
   local temp_dir
   temp_dir="$(mktemp -d)"
   local pids=()
 
   for worker in $(seq 1 "$parallelism"); do
     (
-      place_order "$wallet_id" "$order_id" "${order_id}-retry-${worker}" > "${temp_dir}/response-${worker}.txt"
+      place_order "$wallet_id" "$order_id" "${amount}" "${order_id}-retry-${worker}" > "${temp_dir}/response-${worker}.txt"
     ) &
     pids+=("$!")
   done
@@ -163,14 +166,15 @@ concurrent_same_order_retry() {
 concurrent_distinct_orders() {
   local wallet_id="$1"
   local order_prefix="$2"
-  local parallelism="$3"
+  local amount="$3"
+  local parallelism="$4"
   local temp_dir
   temp_dir="$(mktemp -d)"
   local pids=()
 
   for worker in $(seq 1 "$parallelism"); do
     (
-      place_order "$wallet_id" "${order_prefix}-${worker}" "${order_prefix}-${worker}" > "${temp_dir}/response-${worker}.txt"
+      place_order "$wallet_id" "${order_prefix}-${worker}" "${amount}" "${order_prefix}-${worker}" > "${temp_dir}/response-${worker}.txt"
     ) &
     pids+=("$!")
   done
@@ -209,10 +213,10 @@ pretty_json "$HAPPY_WALLET_RESPONSE"
 HAPPY_WALLET_ID="$(extract_json_field "$HAPPY_WALLET_RESPONSE" "walletId")"
 
 print_section "Place order: ORDER-1001"
-print_http_result "$(place_order "${HAPPY_WALLET_ID}" "ORDER-1001" "ORDER-1001")"
+print_http_result "$(place_order "${HAPPY_WALLET_ID}" "ORDER-1001" 125 "ORDER-1001")"
 
 print_section "Retry same order: ORDER-1001"
-print_http_result "$(place_order "${HAPPY_WALLET_ID}" "ORDER-1001" "ORDER-1001-retry")"
+print_http_result "$(place_order "${HAPPY_WALLET_ID}" "ORDER-1001" 125 "ORDER-1001-retry")"
 
 print_section "Wallet after order and retry"
 print_http_result "$(get_wallet "${HAPPY_WALLET_ID}")"
@@ -226,10 +230,10 @@ pretty_json "$LOW_BALANCE_WALLET_RESPONSE"
 LOW_BALANCE_WALLET_ID="$(extract_json_field "$LOW_BALANCE_WALLET_RESPONSE" "walletId")"
 
 print_section "Place order that should be rejected: ORDER-2001"
-print_http_result "$(place_order "${LOW_BALANCE_WALLET_ID}" "ORDER-2001" "ORDER-2001")"
+print_http_result "$(place_order "${LOW_BALANCE_WALLET_ID}" "ORDER-2001" 100 "ORDER-2001")"
 
 print_section "Retry rejected order: ORDER-2001"
-print_http_result "$(place_order "${LOW_BALANCE_WALLET_ID}" "ORDER-2001" "ORDER-2001-retry")"
+print_http_result "$(place_order "${LOW_BALANCE_WALLET_ID}" "ORDER-2001" 100 "ORDER-2001-retry")"
 
 print_section "Concurrent retry storm setup"
 CONCURRENT_RETRY_WALLET_RESPONSE="$(setup_wallet 500)"
@@ -237,7 +241,7 @@ pretty_json "$CONCURRENT_RETRY_WALLET_RESPONSE"
 CONCURRENT_RETRY_WALLET_ID="$(extract_json_field "$CONCURRENT_RETRY_WALLET_RESPONSE" "walletId")"
 
 print_section "Concurrent retries for the same order ID"
-concurrent_same_order_retry "${CONCURRENT_RETRY_WALLET_ID}" "ORDER-3001" 5
+concurrent_same_order_retry "${CONCURRENT_RETRY_WALLET_ID}" "ORDER-3001" 110 5
 
 print_section "Wallet after concurrent same-order retries"
 print_http_result "$(get_wallet "${CONCURRENT_RETRY_WALLET_ID}")"
@@ -248,7 +252,7 @@ pretty_json "$CONCURRENT_DISTINCT_WALLET_RESPONSE"
 CONCURRENT_DISTINCT_WALLET_ID="$(extract_json_field "$CONCURRENT_DISTINCT_WALLET_RESPONSE" "walletId")"
 
 print_section "Concurrent different orders against limited balance"
-concurrent_distinct_orders "${CONCURRENT_DISTINCT_WALLET_ID}" "ORDER-4001" 5
+concurrent_distinct_orders "${CONCURRENT_DISTINCT_WALLET_ID}" "ORDER-4001" 100 5
 
 print_section "Wallet after concurrent distinct orders"
 print_http_result "$(get_wallet "${CONCURRENT_DISTINCT_WALLET_ID}")"

@@ -7,6 +7,7 @@ import org.example.wallet.domain.MoneyMovementType;
 import org.example.wallet.domain.TopupResult;
 import org.example.wallet.domain.Wallet;
 import org.example.wallet.domain.WalletTransaction;
+import org.example.wallet.error.IdempotencyConflictException;
 import org.example.wallet.error.InvalidRequestException;
 import org.example.wallet.error.WalletNotFoundException;
 import org.example.wallet.events.EventPublisher;
@@ -35,7 +36,6 @@ public class WalletApplicationService {
     private final WalletMutationExecutor mutationExecutor;
     private final MetricsPort metricsPort;
     private final EventPublisher eventPublisher;
-    private final long deductionAmount;
 
     public WalletApplicationService(
             WalletRepository walletRepository,
@@ -43,15 +43,13 @@ public class WalletApplicationService {
             IdempotencyRepository idempotencyRepository,
             WalletMutationExecutor mutationExecutor,
             MetricsPort metricsPort,
-            EventPublisher eventPublisher,
-            long deductionAmount) {
+            EventPublisher eventPublisher) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
         this.idempotencyRepository = idempotencyRepository;
         this.mutationExecutor = mutationExecutor;
         this.metricsPort = metricsPort;
         this.eventPublisher = eventPublisher;
-        this.deductionAmount = deductionAmount;
     }
 
     /**
@@ -119,26 +117,32 @@ public class WalletApplicationService {
     }
 
     /**
-     * Applies the fixed deduction amount once per idempotency key.
+     * Applies the requested deduction amount once per idempotency key.
      *
      * <p>If the same wallet and idempotency key are seen again, the previously stored outcome is
      * returned without performing another deduction.
      */
-    public DeductionResult deduct(String walletId, String idempotencyKey, String referenceId) {
+    public DeductionResult deduct(String walletId, String idempotencyKey, long amount, String referenceId) {
         validateIdempotencyKey(idempotencyKey);
+        validateDeductionAmount(amount);
 
         return measure("deduct", () -> mutationExecutor.execute(walletId, () -> {
             IdempotencyRecord existingRecord = idempotencyRepository.find(walletId, idempotencyKey).orElse(null);
             if (existingRecord != null) {
+                if (existingRecord.requestedAmount() != amount) {
+                    throw new IdempotencyConflictException(
+                            "The same idempotency key cannot be reused with a different amount.");
+                }
                 metricsPort.recordIdempotentReplay();
-                return DeductionResult.fromRecord(existingRecord, deductionAmount, true);
+                return DeductionResult.fromRecord(existingRecord, true);
             }
 
             Wallet wallet = requireWallet(walletId);
-            if (wallet.getBalance() < deductionAmount) {
+            if (wallet.getBalance() < amount) {
                 IdempotencyRecord rejectedRecord = new IdempotencyRecord(
                         walletId,
                         idempotencyKey,
+                        amount,
                         DeductionStatus.REJECTED,
                         null,
                         wallet.getBalance(),
@@ -147,20 +151,20 @@ public class WalletApplicationService {
                         Instant.now());
                 idempotencyRepository.save(rejectedRecord);
 
-                DeductionResult rejectedResult = DeductionResult.fromRecord(rejectedRecord, deductionAmount, false);
+                DeductionResult rejectedResult = DeductionResult.fromRecord(rejectedRecord, false);
                 metricsPort.recordDeductRejected();
                 eventPublisher.publishWalletDeductionRejected(rejectedResult);
                 return rejectedResult;
             }
 
-            Wallet updatedWallet = wallet.deduct(deductionAmount);
+            Wallet updatedWallet = wallet.deduct(amount);
             walletRepository.save(updatedWallet);
 
             WalletTransaction transaction = new WalletTransaction(
                     UUID.randomUUID().toString(),
                     walletId,
                     MoneyMovementType.DEDUCT,
-                    deductionAmount,
+                    amount,
                     normalizeReference(referenceId, idempotencyKey),
                     idempotencyKey,
                     updatedWallet.getBalance(),
@@ -170,6 +174,7 @@ public class WalletApplicationService {
             IdempotencyRecord successRecord = new IdempotencyRecord(
                     walletId,
                     idempotencyKey,
+                    amount,
                     DeductionStatus.SUCCESS,
                     transaction.transactionId(),
                     updatedWallet.getBalance(),
@@ -178,7 +183,7 @@ public class WalletApplicationService {
                     Instant.now());
             idempotencyRepository.save(successRecord);
 
-            DeductionResult successResult = DeductionResult.fromRecord(successRecord, deductionAmount, false);
+            DeductionResult successResult = DeductionResult.fromRecord(successRecord, false);
             metricsPort.recordDeductSuccess();
             eventPublisher.publishWalletDeducted(successResult);
             return successResult;
@@ -226,6 +231,12 @@ public class WalletApplicationService {
     private void validateIdempotencyKey(String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new InvalidRequestException("Idempotency key must be provided.");
+        }
+    }
+
+    private void validateDeductionAmount(long amount) {
+        if (amount <= 0) {
+            throw new InvalidRequestException("Deduction amount must be positive.");
         }
     }
 

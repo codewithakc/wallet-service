@@ -13,14 +13,11 @@ public record DeductionResult(
         return status == DeductionStatus.SUCCESS;
     }
 
-    public static DeductionResult fromRecord(
-            IdempotencyRecord record,
-            long deductedAmount,
-            boolean servedFromIdempotencyCache) {
+    public static DeductionResult fromRecord(IdempotencyRecord record, boolean servedFromIdempotencyCache) {
         return new DeductionResult(
                 record.walletId(),
                 record.status(),
-                deductedAmount,
+                record.requestedAmount(),
                 record.balanceAfter(),
                 record.transactionId(),
                 record.errorCode(),

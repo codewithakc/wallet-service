@@ -99,7 +99,11 @@ public class WalletResource {
             @Context ContainerRequestContext requestContext) {
         AuthorizationSupport.requireRole(requestContext, CallerRole.ORDER_SERVICE);
         DeductionResult result =
-                walletApplicationService.deduct(walletId, request.idempotencyKey(), request.referenceId());
+                walletApplicationService.deduct(
+                        walletId,
+                        request.idempotencyKey(),
+                        request.amount(),
+                        request.referenceId());
 
         if (result.isSuccess()) {
             return Response.ok(DeductResponse.from(result)).build();

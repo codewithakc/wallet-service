@@ -86,7 +86,8 @@ api_call() {
 concurrent_same_key_test() {
   local wallet_id="$1"
   local order_id="$2"
-  local parallelism="$3"
+  local amount="$3"
+  local parallelism="$4"
 
   print_section "Concurrent idempotency test for wallet ${wallet_id}"
   local temp_dir
@@ -97,6 +98,7 @@ concurrent_same_key_test() {
     (
       api_call "POST" "/wallets/${wallet_id}/deduct" "${ORDER_SERVICE_TOKEN}" "{
         \"idempotencyKey\": \"${order_id}\",
+        \"amount\": ${amount},
         \"referenceId\": \"${order_id}-worker-${i}\"
       }" > "${temp_dir}/response-${i}.json"
     ) &
@@ -140,12 +142,14 @@ pretty_json "$(api_call "GET" "/wallets/${WALLET_ID}" "${CUSTOMER_TOKEN}")"
 print_section "Deduct once"
 pretty_json "$(api_call "POST" "/wallets/${WALLET_ID}/deduct" "${ORDER_SERVICE_TOKEN}" '{
   "idempotencyKey": "order-e2e-1",
+  "amount": 125,
   "referenceId": "order-e2e-1"
 }')"
 
 print_section "Replay same deduct request"
 pretty_json "$(api_call "POST" "/wallets/${WALLET_ID}/deduct" "${ORDER_SERVICE_TOKEN}" '{
   "idempotencyKey": "order-e2e-1",
+  "amount": 125,
   "referenceId": "order-e2e-1-retry"
 }')"
 
@@ -159,7 +163,7 @@ CONCURRENT_CREATE_RESPONSE="$(api_call "POST" "/wallets" "${CUSTOMER_TOKEN}" '{
 pretty_json "$CONCURRENT_CREATE_RESPONSE"
 CONCURRENT_WALLET_ID="$(extract_json_field "$CONCURRENT_CREATE_RESPONSE" "walletId")"
 
-concurrent_same_key_test "$CONCURRENT_WALLET_ID" "order-concurrent-1" 5
+concurrent_same_key_test "$CONCURRENT_WALLET_ID" "order-concurrent-1" 100 5
 
 print_section "Concurrent wallet final state"
 pretty_json "$(api_call "GET" "/wallets/${CONCURRENT_WALLET_ID}" "${CUSTOMER_TOKEN}")"

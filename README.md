@@ -8,7 +8,7 @@ The service is built with `Dropwizard` and structured so the runtime stays light
 - `POST /wallets` to create a wallet
 - `GET /wallets/{walletId}` to read wallet metadata and current balance
 - `POST /wallets/{walletId}/topup` to add funds
-- `POST /wallets/{walletId}/deduct` to deduct a fixed `100`
+- `POST /wallets/{walletId}/deduct` to deduct an amount supplied by `Order Service`
 - `GET /wallets/{walletId}/balance` to read the current balance
 - `GET /wallets/{walletId}/transactions` to read the ledger
 - idempotent `deduct` using a caller-provided `idempotencyKey`
@@ -155,6 +155,7 @@ curl -X POST http://localhost:8080/wallets/<wallet-id>/deduct \
   -H "Content-Type: application/json" \
   -d '{
     "idempotencyKey": "order-9001",
+    "amount": 125,
     "referenceId": "order-9001"
   }'
 ```
@@ -224,6 +225,7 @@ Hibernate-ready entities already exist under `src/main/java/org/example/wallet/p
 ## Testing methodology
 I focused tests on the failure modes that matter most for a wallet service:
 - repeated deduct requests with the same idempotency key
+- reuse of the same idempotency key with a different amount
 - concurrent deduct requests against the same wallet
 - insufficient balance handling
 - auth and authorization errors

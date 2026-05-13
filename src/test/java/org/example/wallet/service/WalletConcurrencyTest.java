@@ -62,8 +62,7 @@ class WalletConcurrencyTest {
                 new InMemoryIdempotencyRepository(),
                 new InMemoryWalletMutationExecutor(),
                 new NoOpMetricsPort(),
-                new NoOpEventPublisher(),
-                100L);
+                new NoOpEventPublisher());
     }
 
     private List<DeductionResult> executeConcurrent(
@@ -74,7 +73,7 @@ class WalletConcurrencyTest {
         try {
             List<Callable<DeductionResult>> tasks = new ArrayList<>();
             for (String idempotencyKey : idempotencyKeys) {
-                tasks.add(() -> service.deduct(walletId, idempotencyKey, idempotencyKey));
+                tasks.add(() -> service.deduct(walletId, idempotencyKey, 100, idempotencyKey));
             }
 
             List<Future<DeductionResult>> futures = executorService.invokeAll(tasks);

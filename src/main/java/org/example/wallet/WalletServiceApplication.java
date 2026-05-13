@@ -76,7 +76,6 @@ public class WalletServiceApplication extends Application<WalletServiceConfigura
                 idempotencyRepository,
                 mutationExecutor,
                 metricsPort,
-                eventPublisher,
-                configuration.getDeductionAmount());
+                eventPublisher);
     }
 }

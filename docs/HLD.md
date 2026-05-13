@@ -13,7 +13,7 @@ The implementation for this submission runs in-memory, but the architecture is i
 In scope:
 - Wallet creation
 - Wallet top-up
-- Fixed amount deduction of `INR 100`
+- Order-value deduction requested by `Order Service`
 - Balance lookup
 - Transaction history lookup
 - Basic authentication and authorization
@@ -52,9 +52,10 @@ Required APIs:
 
 Business rules:
 - `topup` increases balance by the requested positive amount.
-- `deduct` always attempts exactly `100`.
-- `deduct` succeeds only if balance is at least `100`.
+- `deduct` uses the amount provided by the trusted `Order Service`.
+- `deduct` succeeds only if balance is at least the requested amount.
 - repeated `deduct` requests for the same `walletId + idempotencyKey` must return the same logical result.
+- repeated `deduct` requests for the same idempotency key must not allow amount drift.
 - wallet state and ledger must stay consistent.
 
 ## 5. Non-Functional Goals
@@ -164,15 +165,15 @@ participant Service as WalletApplicationService
 participant Store as Stores
 participant Idempotency as IdempotencyStore
 
-OrderService->>API: POST /wallets/{id}/deduct (idempotencyKey)
-API->>Service: deduct(walletId, idempotencyKey)
+OrderService->>API: POST /wallets/{id}/deduct (idempotencyKey, amount)
+API->>Service: deduct(walletId, idempotencyKey, amount)
 Service->>Store: acquire wallet lock
 Service->>Idempotency: lookup key
 alt key exists
   Idempotency-->>Service: existing result
   Service-->>API: prior result with servedFromIdempotencyCache=true
 else new key
-  Service->>Store: validate balance >= 100
+  Service->>Store: validate balance >= requestedAmount
   Service->>Store: update balance
   Service->>Store: append ledger entry
   Service->>Idempotency: persist result
@@ -200,6 +201,7 @@ Primary entities:
 - `DeductionRecord`
   - `walletId`
   - `idempotencyKey`
+  - `requestedAmount`
   - `result`
   - `transactionId`
   - `createdAt`
@@ -245,6 +247,7 @@ For multi-node deployment:
 - Forbidden operations return `403`
 - Missing wallets return `404`
 - Insufficient funds return `409`
+- Idempotency payload conflicts return `409`
 - Duplicate wallet creation returns `409`
 - Unexpected failures return `500`
 

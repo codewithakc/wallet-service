@@ -2,7 +2,6 @@ package org.example.wallet;
 
 import io.dropwizard.core.Configuration;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -16,9 +15,6 @@ public class WalletServiceConfiguration extends Configuration {
 
     @NotNull
     private RuntimeMode runtimeMode = RuntimeMode.INMEMORY;
-
-    @Min(1)
-    private long deductionAmount = 100L;
 
     public AuthConfiguration getAuth() {
         return auth;
@@ -34,14 +30,6 @@ public class WalletServiceConfiguration extends Configuration {
 
     public void setRuntimeMode(RuntimeMode runtimeMode) {
         this.runtimeMode = runtimeMode;
-    }
-
-    public long getDeductionAmount() {
-        return deductionAmount;
-    }
-
-    public void setDeductionAmount(long deductionAmount) {
-        this.deductionAmount = deductionAmount;
     }
 
     public enum RuntimeMode {

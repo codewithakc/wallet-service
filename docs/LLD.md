@@ -61,8 +61,6 @@ org.example.wallet
 - `runtimeMode`
   - `INMEMORY`
   - optional placeholder value `HIBERNATE`
-- `deductionAmount`
-  - default `100`
 
 Optional future section:
 - `database`
@@ -134,6 +132,7 @@ Request:
 ```json
 {
   "idempotencyKey": "order-9001",
+  "amount": 125,
   "referenceId": "order-9001"
 }
 ```
@@ -142,10 +141,10 @@ Success response:
 ```json
 {
   "walletId": "wal-123",
-  "balance": 700,
+  "balance": 675,
   "transactionId": "txn-002",
   "status": "SUCCESS",
-  "deductedAmount": 100,
+  "deductedAmount": 125,
   "servedFromIdempotencyCache": false
 }
 ```
@@ -155,6 +154,14 @@ Insufficient funds response:
 {
   "errorCode": "INSUFFICIENT_BALANCE",
   "message": "Wallet balance is lower than the deduction amount."
+}
+```
+
+Idempotency conflict response:
+```json
+{
+  "errorCode": "IDEMPOTENCY_CONFLICT",
+  "message": "The same idempotency key cannot be reused with a different amount."
 }
 ```
 
@@ -241,6 +248,7 @@ Rules:
 Fields:
 - `walletId`
 - `idempotencyKey`
+- `requestedAmount`
 - `outcome`
 - `transactionId`
 - `balanceAfterOperation`
@@ -271,18 +279,20 @@ Rules:
 
 ### 6.3 deduct
 1. validate idempotency key
-2. execute mutation under wallet lock
-3. check `IdempotencyRepository`
-4. if record exists, return stored outcome
-5. load wallet
-6. if balance `< deductionAmount`, store rejected outcome and return domain error
-7. decrease balance
-8. persist updated wallet
-9. append ledger entry
-10. persist idempotency result
-11. record metrics
-12. publish event
-13. return success response
+2. validate amount
+3. execute mutation under wallet lock
+4. check `IdempotencyRepository`
+5. if record exists and amount matches, return stored outcome
+6. if record exists and amount does not match, reject the retry as an idempotency conflict
+7. load wallet
+8. if balance `< amount`, store rejected outcome and return domain error
+9. decrease balance by the requested amount
+10. persist updated wallet
+11. append ledger entry
+12. persist idempotency result
+13. record metrics
+14. publish event
+15. return success response
 
 ### 6.4 Database-backed deduct strategy
 Preferred production strategy for the debit path:
@@ -374,6 +384,7 @@ Specialized exceptions:
 - `WalletNotFoundException`
 - `DuplicateWalletException`
 - `InvalidRequestException`
+- `IdempotencyConflictException`
 - `InsufficientBalanceException`
 - `UnauthorizedException`
 - `ForbiddenException`
@@ -418,6 +429,7 @@ Future production design:
 - deduct success
 - deduct insufficient balance
 - deduct idempotent replay
+- deduct idempotency conflict on amount mismatch
 - invalid request cases
 
 ### Concurrency tests
@@ -434,6 +446,6 @@ Future production design:
 - verify Hibernate entity mappings compile and basic DAO wiring can be constructed
 
 ## 13. Implementation Notes
-- Money will be stored as integer rupees in this exercise for readability because the deduction amount is a fixed `100`. If extended to arbitrary amounts, migrate to paise with a dedicated money value object.
+- Money is stored as integer rupees in this exercise for readability. For production-grade arbitrary amounts and currencies, migrate to paise or a dedicated money value object.
 - Use immutable response DTOs where possible.
 - Keep service logic deterministic and side-effect ordering explicit: state change first, event publishing second.

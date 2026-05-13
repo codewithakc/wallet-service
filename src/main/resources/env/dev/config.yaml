@@ -12,7 +12,6 @@ logging:
     org.example.wallet: INFO
 
 runtimeMode: INMEMORY
-deductionAmount: 100
 
 auth:
   customerTokenPrefix: customer-token
