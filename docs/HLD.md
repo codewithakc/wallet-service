@@ -108,6 +108,8 @@ In-memory correctness depends on serializing state mutations per wallet. The ser
 - balance checks and updates happen atomically
 - duplicate deductions for the same idempotency key are safely handled
 
+For a future database-backed runtime, the preferred debit strategy is an atomic conditional update on the wallet row, for example `UPDATE ... WHERE balance >= amount`. That keeps the no-negative-balance guarantee close to the database, reduces lock duration, and performs better than a read-then-write flow for hot wallet rows.
+
 ### 7.5 Lightweight auth
 To make the service production-aware without overscoping:
 - customer-facing operations use a token that carries customer identity
@@ -216,9 +218,18 @@ Future relational mapping:
 ### Next step
 Move to Hibernate plus transactional DB:
 - replace in-memory repositories with database repositories
-- use optimistic locking with wallet version, or row-level locks
+- use an atomic conditional balance update as the preferred debit path
+- keep optimistic locking on the wallet row as an ORM-friendly concurrency safeguard
+- reserve `SELECT ... FOR UPDATE` for more complex flows that need explicit row serialization
 - enforce uniqueness on `(wallet_id, idempotency_key)`
 - keep application service unchanged
+
+Example debit shape:
+- insert or validate the idempotency record in the same transaction
+- run `UPDATE wallets SET balance = balance - amount ... WHERE wallet_id = ? AND balance >= amount`
+- if no row is updated, treat it as insufficient balance or missing wallet
+- append the ledger row and optional outbox event
+- commit once the full state transition is durable
 
 ### Later scaling
 For multi-node deployment:

@@ -284,6 +284,25 @@ Rules:
 12. publish event
 13. return success response
 
+### 6.4 Database-backed deduct strategy
+Preferred production strategy for the debit path:
+1. begin database transaction
+2. insert or check the idempotency key with a unique constraint on `(wallet_id, idempotency_key)`
+3. execute an atomic conditional balance update such as:
+   - `UPDATE wallets SET balance = balance - :amount, version = version + 1 WHERE wallet_id = :walletId AND balance >= :amount`
+4. inspect affected row count:
+   - `1` means the debit succeeded
+   - `0` means insufficient balance or wallet missing
+5. append the ledger row
+6. persist the final idempotency outcome
+7. optionally persist an outbox row for event publication
+8. commit
+
+Why this is preferred:
+- keeps the non-negative balance rule inside the database write itself
+- avoids a race-prone read-then-write flow
+- usually performs better than `SELECT ... FOR UPDATE` for hot debit paths
+
 ## 7. Repository Interfaces
 ### 7.1 WalletRepository
 Methods:
@@ -341,6 +360,11 @@ Expected relational constraints:
 - `wallet_transactions.transaction_id` unique
 - `deduction_idempotency(wallet_id, idempotency_key)` unique
 - `wallets.version` for optimistic locking
+
+Concurrency options for the database path:
+- preferred: atomic conditional update for debit and top-up style balance changes
+- alternative: optimistic locking via `wallets.version` when staying closer to ORM-managed entity updates
+- use `SELECT ... FOR UPDATE` only when a workflow requires explicit row serialization across multiple dependent reads and writes
 
 ## 10. Error Model
 Base exception:
