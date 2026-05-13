@@ -1,5 +1,6 @@
 package org.example.wallet;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
 import io.dropwizard.core.Application;
 import io.dropwizard.core.setup.Bootstrap;
 import io.dropwizard.core.setup.Environment;
@@ -23,6 +24,9 @@ import org.example.wallet.store.inmemory.InMemoryTransactionRepository;
 import org.example.wallet.store.inmemory.InMemoryWalletMutationExecutor;
 import org.example.wallet.store.inmemory.InMemoryWalletRepository;
 
+/**
+ * Dropwizard bootstrap class for the wallet service.
+ */
 public class WalletServiceApplication extends Application<WalletServiceConfiguration> {
     public static void main(String[] args) throws Exception {
         new WalletServiceApplication().run(args);
@@ -43,6 +47,7 @@ public class WalletServiceApplication extends Application<WalletServiceConfigura
     public void run(WalletServiceConfiguration configuration, Environment environment) {
         WalletApplicationService service = buildService(configuration);
 
+        environment.getObjectMapper().disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         environment.healthChecks().register("wallet-service", new WalletHealthCheck());
         environment.jersey().register(new AuthFilter(configuration.getAuth()));
         environment.jersey().register(new WalletResource(service));

@@ -56,7 +56,7 @@ org.example.wallet
 `WalletServiceConfiguration` will contain:
 - `server` and `logging` inherited from Dropwizard
 - `auth`
-  - `customerToken`
+  - `customerTokenPrefix`
   - `orderServiceToken`
 - `runtimeMode`
   - `INMEMORY`
@@ -76,7 +76,6 @@ Optional future section:
 Request:
 ```json
 {
-  "customerId": "cust-101",
   "initialBalance": 500
 }
 ```
@@ -112,7 +111,20 @@ Response:
 }
 ```
 
-### 3.3 Deduct
+### 3.3 Get wallet
+`GET /wallets/{walletId}`
+
+Response:
+```json
+{
+  "walletId": "wal-123",
+  "customerId": "cust-101",
+  "balance": 800,
+  "createdAt": "2026-05-13T12:00:00Z"
+}
+```
+
+### 3.4 Deduct
 `POST /wallets/{walletId}/deduct`
 
 Headers:
@@ -133,7 +145,8 @@ Success response:
   "balance": 700,
   "transactionId": "txn-002",
   "status": "SUCCESS",
-  "deductedAmount": 100
+  "deductedAmount": 100,
+  "servedFromIdempotencyCache": false
 }
 ```
 
@@ -145,7 +158,7 @@ Insufficient funds response:
 }
 ```
 
-### 3.4 Balance
+### 3.5 Balance
 `GET /wallets/{walletId}/balance`
 
 Response:
@@ -156,7 +169,7 @@ Response:
 }
 ```
 
-### 3.5 Transactions
+### 3.6 Transactions
 `GET /wallets/{walletId}/transactions`
 
 Response:
@@ -176,7 +189,7 @@ Response:
 ## 4. Authentication and Authorization
 Authentication model:
 - static bearer tokens from configuration
-- `customerToken` maps to role `CUSTOMER`
+- `customerTokenPrefix:<customerId>` maps to role `CUSTOMER` and provides customer identity
 - `orderServiceToken` maps to role `ORDER_SERVICE`
 
 Authorization matrix:
@@ -184,6 +197,7 @@ Authorization matrix:
 | Endpoint | CUSTOMER | ORDER_SERVICE |
 |---|---|---|
 | `POST /wallets` | yes | no |
+| `GET /wallets/{id}` | yes | yes |
 | `POST /wallets/{id}/topup` | yes | no |
 | `POST /wallets/{id}/deduct` | no | yes |
 | `GET /wallets/{id}/balance` | yes | yes |
@@ -191,7 +205,9 @@ Authorization matrix:
 
 Implementation notes:
 - `AuthFilter` parses the bearer token and injects a `CallerContext` into request scope.
-- Resource methods validate required roles through a small helper instead of spreading auth logic through services.
+- Customer identity is derived from the token rather than request parameters.
+- `POST /wallets` derives `customerId` from the authenticated token rather than the request body.
+- Resource methods validate required roles and enforce wallet ownership through a small helper instead of spreading auth logic through services.
 
 ## 5. Domain Objects
 ### 5.1 Wallet
@@ -373,6 +389,7 @@ Future production design:
 ## 12. Testing Plan
 ### Unit tests
 - create wallet
+- create wallet uses customer identity from token
 - top-up success
 - deduct success
 - deduct insufficient balance
@@ -386,6 +403,7 @@ Future production design:
 ### Resource tests
 - status codes
 - auth behavior
+- wallet ownership enforcement
 - JSON payload validation
 
 ### Optional persistence tests

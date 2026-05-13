@@ -1,0 +1,19 @@
+server:
+  applicationConnectors:
+    - type: http
+      port: 8080
+  adminConnectors:
+    - type: http
+      port: 8081
+
+logging:
+  level: INFO
+  loggers:
+    org.example.wallet: INFO
+
+runtimeMode: INMEMORY
+deductionAmount: 100
+
+auth:
+  customerTokenPrefix: customer-token
+  orderServiceToken: order-service-token

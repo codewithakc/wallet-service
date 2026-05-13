@@ -6,6 +6,9 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+/**
+ * Root configuration for the Dropwizard wallet service.
+ */
 public class WalletServiceConfiguration extends Configuration {
     @Valid
     @NotNull
@@ -46,19 +49,22 @@ public class WalletServiceConfiguration extends Configuration {
         HIBERNATE
     }
 
+    /**
+     * Authentication configuration for customer and service callers.
+     */
     public static class AuthConfiguration {
         @NotBlank
-        private String customerToken = "customer-token";
+        private String customerTokenPrefix = "customer-token";
 
         @NotBlank
         private String orderServiceToken = "order-service-token";
 
-        public String getCustomerToken() {
-            return customerToken;
+        public String getCustomerTokenPrefix() {
+            return customerTokenPrefix;
         }
 
-        public void setCustomerToken(String customerToken) {
-            this.customerToken = customerToken;
+        public void setCustomerTokenPrefix(String customerTokenPrefix) {
+            this.customerTokenPrefix = customerTokenPrefix;
         }
 
         public String getOrderServiceToken() {

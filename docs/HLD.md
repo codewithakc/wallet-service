@@ -44,6 +44,7 @@ For this exercise, `MetricsBackend` and `KafkaBroker` are placeholders behind in
 ## 4. Functional Requirements
 Required APIs:
 - `POST /wallets`
+- `GET /wallets/{walletId}`
 - `POST /wallets/{walletId}/topup`
 - `POST /wallets/{walletId}/deduct`
 - `GET /wallets/{walletId}/balance`
@@ -109,9 +110,9 @@ In-memory correctness depends on serializing state mutations per wallet. The ser
 
 ### 7.5 Lightweight auth
 To make the service production-aware without overscoping:
-- customer-facing operations use a configured client token
+- customer-facing operations use a token that carries customer identity
 - order service calls use a separate configured service token
-- authorization is enforced by operation type
+- authorization is enforced by operation type and wallet ownership for customer-facing reads/top-ups
 
 This is intentionally simple and documented as an upgrade point to JWT, mTLS, or service mesh identity.
 
@@ -125,7 +126,8 @@ participant Service as WalletApplicationService
 participant Store as WalletStore
 
 Client->>API: POST /wallets
-API->>Service: createWallet(customerId, initialBalance)
+API->>API: derive customerId from bearer token
+API->>Service: createWallet(customerIdFromToken, initialBalance)
 Service->>Store: create wallet
 Store-->>Service: wallet created
 Service-->>API: wallet response
@@ -142,6 +144,7 @@ participant Store as Stores
 participant Events as EventPublisher
 
 Client->>API: POST /wallets/{id}/topup
+API->>API: verify wallet belongs to customer from token
 API->>Service: topup(walletId, amount)
 Service->>Store: lock wallet and update balance
 Service->>Store: append ledger entry
@@ -165,7 +168,7 @@ Service->>Store: acquire wallet lock
 Service->>Idempotency: lookup key
 alt key exists
   Idempotency-->>Service: existing result
-  Service-->>API: prior result
+  Service-->>API: prior result with servedFromIdempotencyCache=true
 else new key
   Service->>Store: validate balance >= 100
   Service->>Store: update balance
@@ -254,7 +257,7 @@ Default implementations are no-op so the submission stays lightweight.
 ## 13. Trade-offs
 - Keeping current balance on the wallet object improves read performance, but duplicates data derivable from the ledger.
 - In-memory state is not durable; it is chosen here for simplicity and faster demonstration.
-- Lightweight auth proves system thinking, but not full production security.
+- Lightweight auth proves system thinking and avoids trusting request customer IDs, but it is still not full production security.
 - Per-wallet locking is correct on one node, but does not solve distributed concurrency by itself.
 
 ## 14. Deliverable Mapping
