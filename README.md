@@ -4,6 +4,15 @@ This repository contains a production-shaped implementation of the `Wallet Servi
 
 The service is built with `Dropwizard` and structured so the runtime stays lightweight and locally runnable today, while the codebase can evolve toward a transactional `Hibernate + RDBMS` deployment later.
 
+## Tech stack
+- Java 21
+- Maven
+- Dropwizard 5.0.1
+- Jackson for JSON serialization
+- Hibernate model placeholders via `dropwizard-hibernate`
+- JUnit 5 and Dropwizard testing
+- In-memory runtime adapters for local execution
+
 ## What is implemented
 - `POST /wallets` to create a wallet
 - `GET /wallets/{walletId}` to read wallet metadata and current balance
@@ -77,18 +86,11 @@ src/main/java/org/example/wallet/
   events/                     event publisher placeholders
   health/                     health check
   metrics/                    metrics placeholders
-  persistence/hibernate/      future database extension path
+  persistence/hibernate/      Hibernate entities and ORM mapping artifacts
   service/                    core business logic
-  store/                      repository abstractions and in-memory adapters
+  store/                      repository abstractions and adapters
 src/main/resources/env/dev/   development runtime configuration
 ```
-
-## Tech stack
-- Java 21 target
-- Maven
-- Dropwizard 5.0.1
-- Hibernate entity model placeholders via `dropwizard-hibernate`
-- JUnit 5 and Dropwizard testing
 
 ## How to start the service
 ### 1. Build the project
