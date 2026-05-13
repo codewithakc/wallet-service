@@ -49,7 +49,7 @@ The most important cross-service interaction is `Order Service -> Wallet Service
 flowchart LR
 Customer[Customer] --> OrderAPI[Order Service API]
 OrderAPI --> OrderService[Order Service]
-OrderService -->|POST /wallets/{walletId}/deduct| WalletAPI[Wallet Service API]
+OrderService -->|deduct API call| WalletAPI[Wallet Service API]
 WalletAPI --> WalletApp[Wallet Application Service]
 WalletApp --> WalletState[(Wallet Balance)]
 WalletApp --> Idem[(Idempotency Record)]
@@ -275,23 +275,23 @@ flowchart LR
 Customer[Customer] --> Client[Customer App]
 Client --> OrderAPI[Order Service API]
 OrderAPI --> OrderService[Order Service]
-OrderService -->|POST /wallets/{walletId}/deduct| WalletAPI[Wallet Service API]
+OrderService --> WalletAPI[Wallet Service API]
 WalletAPI --> WalletService[Wallet Service]
 
-WalletService --> Postgres[(PostgreSQL / Wallet DB)]
+WalletService --> Postgres[(PostgreSQL Wallet DB)]
 Postgres --> WalletTable[(wallets)]
 Postgres --> LedgerTable[(wallet_transactions)]
 Postgres --> IdemTable[(deduction_idempotency)]
 Postgres --> OutboxTable[(outbox)]
 
-WalletService -. writes event intent .-> OutboxTable
+WalletService -.-> OutboxTable
 OutboxTable --> OutboxRelay[Outbox Relay / CDC]
-OutboxRelay --> Kafka[Kafka / Event Bus]
+OutboxRelay --> Kafka[Kafka Event Bus]
 
-WalletService -. metrics / traces .-> Observability[Metrics / Tracing Backend]
-OrderService -. metrics / traces .-> Observability
+WalletService -.-> Observability[Metrics and Tracing Backend]
+OrderService -.-> Observability
 
-Kafka --> Downstream[Reporting / Notifications / Audit Consumers]
+Kafka --> Downstream[Reporting, Notifications, Audit]
 ```
 
 This shape keeps the wallet mutation path strongly consistent inside one database transaction, while still allowing asynchronous integration with downstream systems. `Order Service` remains synchronously coupled only to the wallet debit decision, not to event delivery.
