@@ -1,4 +1,4 @@
-package org.example.wallet.persistence.hibernate;
+package org.example.wallet.store.hibernate;
 
 /**
  * Placeholder factory that marks where Hibernate-backed repository wiring would live once a

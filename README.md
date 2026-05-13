@@ -221,6 +221,7 @@ Usage:
 - `deduction_idempotency`
 
 Hibernate-ready entities already exist under `src/main/java/org/example/wallet/persistence/hibernate/entity`.
+Repository-side Hibernate adapter placeholders live under `src/main/java/org/example/wallet/store/hibernate`.
 
 ## Testing methodology
 I focused tests on the failure modes that matter most for a wallet service:

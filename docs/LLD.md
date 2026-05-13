@@ -40,16 +40,18 @@ org.example.wallet
 │   ├── TransactionRepository
 │   ├── IdempotencyRepository
 │   ├── WalletMutationExecutor
-│   └── inmemory
-│       ├── InMemoryWalletRepository
-│       ├── InMemoryTransactionRepository
-│       ├── InMemoryIdempotencyRepository
-│       └── InMemoryWalletMutationExecutor
+│   ├── inmemory
+│   │   ├── InMemoryWalletRepository
+│   │   ├── InMemoryTransactionRepository
+│   │   ├── InMemoryIdempotencyRepository
+│   │   └── InMemoryWalletMutationExecutor
+│   └── hibernate
+│       ├── HibernateRepositoryFactory
+│       └── HibernateModeNotYetSupported
 └── persistence
     └── hibernate
         ├── entity
-        ├── dao
-        └── HibernateRepositorySkeletons
+        └── dao
 ```
 
 ## 2. Configuration Model
