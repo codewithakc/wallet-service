@@ -224,7 +224,6 @@ Fields:
 - `walletId`
 - `customerId`
 - `balance`
-- `version`
 - `createdAt`
 
 Rules:
@@ -371,7 +370,7 @@ Expected relational constraints:
 - `wallets.wallet_id` unique
 - `wallet_transactions.transaction_id` unique
 - `deduction_idempotency(wallet_id, idempotency_key)` unique
-- `wallets.version` for optimistic locking
+- optional `wallets.version` column for optimistic locking if the Hibernate runtime uses ORM-managed updates
 
 Concurrency options for the database path:
 - preferred: atomic conditional update for debit and top-up style balance changes

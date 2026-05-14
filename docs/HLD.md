@@ -214,7 +214,6 @@ Primary entities:
   - `walletId`
   - `customerId`
   - `balance`
-  - `version`
   - `createdAt`
 - `WalletTransaction`
   - `transactionId`
@@ -236,6 +235,7 @@ Future relational mapping:
 - `wallets`
 - `wallet_transactions`
 - `deduction_idempotency`
+- optional `wallets.version` column if the database-backed runtime uses optimistic locking
 
 ## 10. Scaling and Evolution Path
 ### Current mode
