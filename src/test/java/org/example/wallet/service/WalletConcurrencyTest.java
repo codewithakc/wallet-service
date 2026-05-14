@@ -10,6 +10,8 @@ import org.example.wallet.store.inmemory.InMemoryTransactionRepository;
 import org.example.wallet.store.inmemory.InMemoryWalletMutationExecutor;
 import org.example.wallet.store.inmemory.InMemoryWalletRepository;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,8 +24,11 @@ import java.util.concurrent.Future;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class WalletConcurrencyTest {
+    private static final Logger LOGGER = LoggerFactory.getLogger(WalletConcurrencyTest.class);
+
     @Test
     void concurrentUniqueDeductRequestsShouldNeverOverdrawWallet() throws Exception {
+        LOGGER.info("Running concurrent distinct-order deduct test.");
         WalletApplicationService service = newService();
         Wallet wallet = service.createWallet("cust-1", 100);
 
@@ -32,6 +37,11 @@ class WalletConcurrencyTest {
 
         long successCount = results.stream().filter(result -> result.status() == DeductionStatus.SUCCESS).count();
         long rejectedCount = results.stream().filter(result -> result.status() == DeductionStatus.REJECTED).count();
+        LOGGER.info(
+                "Concurrent distinct-order results for wallet {}: successCount={}, rejectedCount={}.",
+                wallet.getWalletId(),
+                successCount,
+                rejectedCount);
 
         assertEquals(1, successCount);
         assertEquals(4, rejectedCount);
@@ -40,6 +50,7 @@ class WalletConcurrencyTest {
 
     @Test
     void concurrentSameIdempotencyKeyShouldChargeOnlyOnce() throws Exception {
+        LOGGER.info("Running concurrent same-key idempotency test.");
         WalletApplicationService service = newService();
         Wallet wallet = service.createWallet("cust-1", 500);
 
@@ -48,6 +59,11 @@ class WalletConcurrencyTest {
 
         long successCount = results.stream().filter(result -> result.status() == DeductionStatus.SUCCESS).count();
         long replayCount = results.stream().filter(DeductionResult::servedFromIdempotencyCache).count();
+        LOGGER.info(
+                "Concurrent same-key results for wallet {}: successCount={}, replayCount={}.",
+                wallet.getWalletId(),
+                successCount,
+                replayCount);
 
         assertEquals(5, successCount);
         assertEquals(4, replayCount);

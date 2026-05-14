@@ -1,8 +1,8 @@
 # Wallet Service
 
-This repository contains a production-shaped implementation of the `Wallet Service` for a logistics platform.
+This repository contains a production-shaped `Wallet Service` for a logistics platform.
 
-The service is built with `Dropwizard` and structured so the runtime stays lightweight and locally runnable today, while the codebase can evolve toward a transactional `Hibernate + RDBMS` deployment later.
+It is built with `Dropwizard`. It runs in memory today, but the code is organized so it can move to `Hibernate + RDBMS` later.
 
 ## Tech stack
 - Java 21
@@ -29,14 +29,26 @@ The service is built with `Dropwizard` and structured so the runtime stays light
 - High-level design: [`docs/HLD.md`](docs/HLD.md)
 - Low-level design: [`docs/LLD.md`](docs/LLD.md)
 
+## Deliverables coverage
+- Working implementation:
+  HTTP API under `src/main/java/org/example/wallet/` with create, top-up, deduct, balance, wallet, and transaction endpoints.
+- DB schema / data model:
+  Runtime model and future relational model are described under `Data model`, with Hibernate entities under `src/main/java/org/example/wallet/persistence/hibernate/entity/`.
+- Tests:
+  Test commands and test approach are documented in this README, with automated tests under `src/test/java/org/example/wallet/`.
+- README:
+  This file explains setup, design choices, trade-offs, and next steps.
+- Order Service stub:
+  A working order integration stub is available at `examples/order-service-full-stub.sh`.
+
 ## Why this shape
-The exercise asks for an in-memory implementation, but also for production-level thinking. This solution intentionally separates:
+The service runs in memory, but the code is split so moving to a database later is straightforward:
 - business logic in `WalletApplicationService`
 - storage behind repository interfaces
 - in-memory concurrency control behind `WalletMutationExecutor`
 - operational concerns behind auth, metrics, and event publisher abstractions
 
-That makes the current service easy to run, while preserving a clean path to:
+This keeps the current service easy to run and leaves a clean path to:
 - Hibernate-backed repositories
 - database transactions and optimistic locking
 - Kafka via an outbox pattern
@@ -44,27 +56,27 @@ That makes the current service easy to run, while preserving a clean path to:
 
 ## Core correctness decisions
 ### No negative balances
-Every wallet mutation is serialized per wallet ID using a lock manager. The critical section covers:
+Each wallet update is serialized per wallet ID using a lock. The lock covers:
 - balance validation
 - wallet update
 - ledger append
 - idempotency record write
 
-This ensures one wallet cannot be overdrawn even under concurrent deduct requests.
+This prevents one wallet from being overdrawn, even under concurrent deduct requests.
 
 ### Idempotent deduct
 `POST /wallets/{walletId}/deduct` requires an `idempotencyKey`.
 
-The first call stores the outcome against `walletId + idempotencyKey`.
-Repeated calls with the same key return the same logical outcome:
+The first call stores the result for `walletId + idempotencyKey`.
+Later calls with the same key return the same logical outcome:
 - same success result if the first call succeeded
 - same rejection if the first call failed due to insufficient funds
 
 ### Ledger-first auditability
-Every successful money movement creates a `WalletTransaction` entry. The current balance is stored on the wallet for fast reads, and the ledger provides traceability.
+Every successful money movement creates a `WalletTransaction` entry. The wallet stores the current balance for fast reads, and the ledger keeps the history.
 
 ## Authentication model
-This submission uses a deliberately lightweight auth model:
+The service uses a simple auth model:
 - `customer-token:<customerId>` for customer-facing operations
 - `order-service-token` for the order service
 
@@ -72,7 +84,7 @@ Authorization matrix:
 - customer token: create wallet, top-up, balance, transactions
 - order-service token: deduct, balance, transactions
 
-For customer-facing calls, the service derives `customerId` from the bearer token and enforces wallet ownership on customer reads and top-ups. This is still not a full IAM design, but it avoids trusting request parameters for customer identity.
+For customer-facing calls, the service reads `customerId` from the bearer token and checks wallet ownership on reads and top-ups. This is not a full IAM design, but it avoids trusting request parameters for customer identity.
 
 ## Project structure
 ```text
@@ -116,7 +128,7 @@ curl http://localhost:8081/healthcheck
 mvn test
 ```
 
-The suite currently covers:
+The tests cover:
 - service-level correctness
 - idempotency behavior
 - concurrency behavior for same-wallet deductions
@@ -175,7 +187,7 @@ curl http://localhost:8080/wallets/<wallet-id>/transactions \
 ```
 
 ## Full order service stub
-A broader order-service simulator is available at [`examples/order-service-full-stub.sh`](examples/order-service-full-stub.sh).
+A simple order-service simulator is available at [`examples/order-service-full-stub.sh`](examples/order-service-full-stub.sh).
 
 It covers:
 - setup wallet creation for demo scenarios
@@ -194,7 +206,7 @@ Usage:
 This script behaves more like a mock `Order Service`: it places orders by calling `/wallets/{id}/deduct`, interprets the HTTP result, and shows which orders were accepted or rejected.
 
 ## Full flow stub
-A broader end-to-end smoke script is available at [`examples/full-flow-stub.sh`](examples/full-flow-stub.sh).
+An end-to-end smoke script is available at [`examples/full-flow-stub.sh`](examples/full-flow-stub.sh).
 
 It covers:
 - wallet creation
@@ -218,6 +230,7 @@ Usage:
 - `IdempotencyRecord`
 
 ### Relational shape for future migration
+Future database tables:
 - `wallets`
 - `wallet_transactions`
 - `deduction_idempotency`
@@ -226,14 +239,14 @@ Hibernate-ready entities already exist under `src/main/java/org/example/wallet/p
 Repository-side Hibernate adapter placeholders live under `src/main/java/org/example/wallet/store/hibernate`.
 
 ## Testing methodology
-I focused tests on the failure modes that matter most for a wallet service:
+I focused testing on the failure modes that matter most for a wallet service:
 - repeated deduct requests with the same idempotency key
 - reuse of the same idempotency key with a different amount
 - concurrent deduct requests against the same wallet
 - insufficient balance handling
 - auth and authorization errors
 
-I intentionally did not spend time on large amounts of controller boilerplate testing because the main interview risk is correctness under retries and concurrency.
+I did not spend time on large amounts of controller boilerplate testing because the main risk here is correctness under retries and concurrency.
 
 ## Trade-offs
 ### What is intentionally simplified
@@ -244,13 +257,13 @@ I intentionally did not spend time on large amounts of controller boilerplate te
 - Hibernate runtime mode is modeled, but not fully activated
 
 ### Why those choices are reasonable here
-- the exercise prioritizes correctness and clarity over infrastructure setup
+- the task prioritizes correctness and clarity over infrastructure setup
 - the current design keeps the service easy to run locally
 - the repository and mutation abstractions preserve a clean migration path
 
 ## What I would do next with more time
 1. Activate the Hibernate runtime path with H2 or PostgreSQL and real transactional boundaries.
-2. Add optimistic locking or `SELECT ... FOR UPDATE` depending on the database strategy.
+2. Prefer atomic conditional update for the main balance mutation path; use optimistic locking or `SELECT ... FOR UPDATE` only where needed.
 3. Introduce a transactional outbox for wallet events before publishing to Kafka.
 4. Add pagination and filtering for transaction history.
 5. Replace static tokens with service identity and tenant-aware authorization.

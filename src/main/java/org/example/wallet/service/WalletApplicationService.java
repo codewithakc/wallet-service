@@ -91,6 +91,8 @@ public class WalletApplicationService {
      */
     public TopupResult topup(String walletId, long amount, String referenceId) {
         return measure("topup", () -> mutationExecutor.execute(walletId, () -> {
+            // Top-ups are treated as independent credit operations in this service.
+            // Only deduct uses the idempotency store because order retries must not double-charge.
             Wallet wallet = requireWallet(walletId);
             Wallet updatedWallet = wallet.topup(amount);
             walletRepository.save(updatedWallet);

@@ -27,12 +27,16 @@ import org.example.wallet.store.inmemory.InMemoryWalletMutationExecutor;
 import org.example.wallet.store.inmemory.InMemoryWalletRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(DropwizardExtensionsSupport.class)
 class WalletResourceTest {
+    private static final Logger LOGGER = LoggerFactory.getLogger(WalletResourceTest.class);
+
     private static final String CUSTOMER_AUTH = "Bearer customer-token:cust-api";
     private static final String SECOND_CUSTOMER_AUTH = "Bearer customer-token:other-customer";
     private static final String ORDER_AUTH = "Bearer order-service-token";
@@ -52,6 +56,7 @@ class WalletResourceTest {
 
     @Test
     void createWalletShouldReturnCreated() {
+        LOGGER.info("Running create wallet resource test.");
         Response response = RESOURCES.target("/wallets")
                 .request()
                 .header(HttpHeaders.AUTHORIZATION, CUSTOMER_AUTH)
@@ -65,6 +70,7 @@ class WalletResourceTest {
 
     @Test
     void createWalletShouldSerializeCreatedAtAsIsoString() throws Exception {
+        LOGGER.info("Running createdAt serialization resource test.");
         Response response = RESOURCES.target("/wallets")
                 .request()
                 .header(HttpHeaders.AUTHORIZATION, CUSTOMER_AUTH)
@@ -79,6 +85,7 @@ class WalletResourceTest {
 
     @Test
     void deductShouldRejectCustomerCaller() {
+        LOGGER.info("Running customer-forbidden deduct resource test.");
         WalletResponse wallet = createWallet(300);
 
         Response response = RESOURCES.target("/wallets/" + wallet.walletId() + "/deduct")
@@ -93,6 +100,7 @@ class WalletResourceTest {
 
     @Test
     void getWalletShouldReturnWalletDetails() {
+        LOGGER.info("Running get wallet resource test.");
         WalletResponse createdWallet = createWallet(250);
 
         WalletResponse fetchedWallet = RESOURCES.target("/wallets/" + createdWallet.walletId())
@@ -107,6 +115,7 @@ class WalletResourceTest {
 
     @Test
     void deductShouldSucceedForOrderService() {
+        LOGGER.info("Running order-service deduct resource test.");
         WalletResponse wallet = createWallet(300);
 
         Response response = RESOURCES.target("/wallets/" + wallet.walletId() + "/deduct")
@@ -128,6 +137,7 @@ class WalletResourceTest {
 
     @Test
     void deductShouldRejectIdempotencyKeyReuseWithDifferentAmount() {
+        LOGGER.info("Running idempotency conflict resource test.");
         WalletResponse wallet = createWallet(300);
 
         Response firstResponse = RESOURCES.target("/wallets/" + wallet.walletId() + "/deduct")
@@ -148,6 +158,7 @@ class WalletResourceTest {
 
     @Test
     void requestWithoutAuthorizationShouldReturnUnauthorized() {
+        LOGGER.info("Running unauthorized request resource test.");
         Response response = RESOURCES.target("/wallets")
                 .request()
                 .post(Entity.entity(new CreateWalletRequest(100), MediaType.APPLICATION_JSON_TYPE));
@@ -159,6 +170,7 @@ class WalletResourceTest {
 
     @Test
     void getWalletShouldRejectDifferentCustomer() {
+        LOGGER.info("Running wallet ownership enforcement resource test.");
         WalletResponse createdWallet = createWallet(250);
 
         Response response = RESOURCES.target("/wallets/" + createdWallet.walletId())
