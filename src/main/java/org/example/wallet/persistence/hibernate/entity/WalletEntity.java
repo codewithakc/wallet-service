@@ -4,7 +4,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 
 import java.time.Instant;
 
@@ -23,10 +22,6 @@ public class WalletEntity {
 
     @Column(name = "balance", nullable = false)
     private long balance;
-
-    @Version
-    @Column(name = "version", nullable = false)
-    private long version;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -53,14 +48,6 @@ public class WalletEntity {
 
     public void setBalance(long balance) {
         this.balance = balance;
-    }
-
-    public long getVersion() {
-        return version;
-    }
-
-    public void setVersion(long version) {
-        this.version = version;
     }
 
     public Instant getCreatedAt() {
