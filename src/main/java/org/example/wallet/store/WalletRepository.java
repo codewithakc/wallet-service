@@ -32,4 +32,9 @@ public interface WalletRepository {
      * Checks whether a wallet ID is already present in the store.
      */
     boolean exists(String walletId);
+
+    /**
+     * Looks up a wallet by customer identifier.
+     */
+    java.util.Optional<Wallet> findByCustomerId(String customerId);
 }

@@ -14,7 +14,7 @@ public class NoOpEventPublisher implements EventPublisher {
     }
 
     @Override
-    public void publishWalletDeducted(DeductionResult deductionResult) {
+    public void publishWalletDeducted(DeductionResult deductionResult, WalletTransaction transaction) {
     }
 
     @Override

@@ -9,7 +9,7 @@ public interface EventPublisher {
 
     void publishWalletToppedUp(Wallet wallet, WalletTransaction transaction);
 
-    void publishWalletDeducted(DeductionResult deductionResult);
+    void publishWalletDeducted(DeductionResult deductionResult, WalletTransaction transaction);
 
     void publishWalletDeductionRejected(DeductionResult deductionResult);
 }

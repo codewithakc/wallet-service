@@ -16,3 +16,11 @@ runtimeMode: INMEMORY
 auth:
   customerTokenPrefix: customer-token
   orderServiceToken: order-service-token
+
+companyWallet:
+  customerId: platform-company
+  initialBalance: 0
+
+outbox:
+  pollIntervalMs: 500
+  batchSize: 50

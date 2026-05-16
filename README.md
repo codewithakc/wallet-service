@@ -22,8 +22,33 @@ It is built with `Dropwizard`. It runs in memory today, but the code is organize
 - `GET /wallets/{walletId}/transactions` to read the ledger
 - idempotent `deduct` using a caller-provided `idempotencyKey`
 - lightweight auth for customer and order-service callers
-- no-op placeholders for metrics and Kafka/event publishing
+- transactional **outbox** for customer money-movement events
+- **company mirror ledger**: customer `DEDUCT` credits the platform wallet; customer `TOPUP` debits it (reverse entry)
+- in-process outbox poller that applies mirror entries idempotently
 - Hibernate entity skeletons for future database-backed persistence
+
+## Company mirror ledger (outbox)
+When a customer wallet changes successfully, the service appends an outbox event inside the same wallet mutation boundary. A background `OutboxProcessor` publishes the event to an in-process handler that mirrors the movement on the **platform company wallet**.
+
+| Customer movement | Company mirror |
+|-------------------|------------------|
+| Successful `DEDUCT` | `TOPUP` (credit) same amount |
+| `TOPUP` | `DEDUCT` (debit) same amount |
+
+Rejected customer deducts and idempotent deduct **replays** do not create outbox rows or duplicate company entries. Company mirror idempotency uses `mirror:{customerTransactionId}`.
+
+Configuration (`src/main/resources/env/dev/config.yaml`):
+
+```yaml
+companyWallet:
+  customerId: platform-company
+  initialBalance: 0
+outbox:
+  pollIntervalMs: 500
+  batchSize: 50
+```
+
+See [`docs/COMPANY-LEDGER.md`](docs/COMPANY-LEDGER.md) for flow, consistency notes, and future Kafka transport.
 
 ## Design documents
 - High-level design: [`docs/HLD.md`](docs/HLD.md)
@@ -51,7 +76,7 @@ The service runs in memory, but the code is split so moving to a database later 
 This keeps the current service easy to run and leaves a clean path to:
 - Hibernate-backed repositories
 - database transactions and optimistic locking
-- Kafka via an outbox pattern
+- Kafka transport for outbox events (in-process dispatcher today)
 - richer metrics and tracing
 
 ## Core correctness decisions
@@ -245,6 +270,7 @@ I focused testing on the failure modes that matter most for a wallet service:
 - concurrent deduct requests against the same wallet
 - insufficient balance handling
 - auth and authorization errors
+- outbox-driven company mirror ledger (deduct credit, topup debit, idempotent mirror)
 
 I did not spend time on large amounts of controller boilerplate testing because the main risk here is correctness under retries and concurrency.
 

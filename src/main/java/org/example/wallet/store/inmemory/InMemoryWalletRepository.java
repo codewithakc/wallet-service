@@ -37,4 +37,11 @@ public class InMemoryWalletRepository implements WalletRepository {
     public boolean exists(String walletId) {
         return wallets.containsKey(walletId);
     }
+
+    @Override
+    public Optional<Wallet> findByCustomerId(String customerId) {
+        return wallets.values().stream()
+                .filter(wallet -> wallet.getCustomerId().equals(customerId))
+                .findFirst();
+    }
 }

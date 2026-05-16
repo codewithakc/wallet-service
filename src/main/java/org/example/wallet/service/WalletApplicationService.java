@@ -64,7 +64,7 @@ public class WalletApplicationService {
         String walletId = UUID.randomUUID().toString();
         return measure("createWallet", () -> mutationExecutor.execute(walletId, () -> {
             Instant now = Instant.now();
-            Wallet wallet = Wallet.create(walletId, customerId.trim(), initialBalance, now);
+            Wallet wallet = Wallet.createCustomer(walletId, customerId.trim(), initialBalance, now);
             walletRepository.create(wallet);
 
             if (initialBalance > 0) {
@@ -152,7 +152,6 @@ public class WalletApplicationService {
                         "Wallet balance is lower than the deduction amount.",
                         Instant.now());
                 idempotencyRepository.save(rejectedRecord);
-
                 DeductionResult rejectedResult = DeductionResult.fromRecord(rejectedRecord, false);
                 metricsPort.recordDeductRejected();
                 eventPublisher.publishWalletDeductionRejected(rejectedResult);
@@ -187,7 +186,7 @@ public class WalletApplicationService {
 
             DeductionResult successResult = DeductionResult.fromRecord(successRecord, false);
             metricsPort.recordDeductSuccess();
-            eventPublisher.publishWalletDeducted(successResult);
+            eventPublisher.publishWalletDeducted(successResult, transaction);
             return successResult;
         }));
     }

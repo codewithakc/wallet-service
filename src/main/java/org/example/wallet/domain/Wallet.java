@@ -8,38 +8,48 @@ import java.time.Instant;
 public final class Wallet {
     private final String walletId;
     private final String customerId;
+    private final WalletKind walletKind;
     private final long balance;
     private final Instant createdAt;
 
-    public Wallet(String walletId, String customerId, long balance, Instant createdAt) {
-        if (balance < 0) {
+    public Wallet(String walletId, String customerId, WalletKind walletKind, long balance, Instant createdAt) {
+        if (walletKind != WalletKind.PLATFORM && balance < 0) {
             throw new InvalidRequestException("Wallet balance cannot be negative.");
         }
         this.walletId = walletId;
         this.customerId = customerId;
+        this.walletKind = walletKind;
         this.balance = balance;
         this.createdAt = createdAt;
     }
 
-    public static Wallet create(String walletId, String customerId, long initialBalance, Instant createdAt) {
-        return new Wallet(walletId, customerId, initialBalance, createdAt);
+    public static Wallet createCustomer(String walletId, String customerId, long initialBalance, Instant createdAt) {
+        return new Wallet(walletId, customerId, WalletKind.CUSTOMER, initialBalance, createdAt);
+    }
+
+    public static Wallet platformCompany(String walletId, String customerId, long initialBalance, Instant createdAt) {
+        return new Wallet(walletId, customerId, WalletKind.PLATFORM, initialBalance, createdAt);
+    }
+
+    public boolean allowsNegativeBalance() {
+        return walletKind == WalletKind.PLATFORM;
     }
 
     public Wallet topup(long amount) {
         if (amount <= 0) {
             throw new InvalidRequestException("Top-up amount must be positive.");
         }
-        return new Wallet(walletId, customerId, balance + amount, createdAt);
+        return new Wallet(walletId, customerId, walletKind, balance + amount, createdAt);
     }
 
     public Wallet deduct(long amount) {
         if (amount <= 0) {
             throw new InvalidRequestException("Deduction amount must be positive.");
         }
-        if (balance < amount) {
+        if (!allowsNegativeBalance() && balance < amount) {
             throw new InsufficientBalanceException("Wallet balance is lower than the deduction amount.");
         }
-        return new Wallet(walletId, customerId, balance - amount, createdAt);
+        return new Wallet(walletId, customerId, walletKind, balance - amount, createdAt);
     }
 
     public String getWalletId() {
@@ -48,6 +58,10 @@ public final class Wallet {
 
     public String getCustomerId() {
         return customerId;
+    }
+
+    public WalletKind getWalletKind() {
+        return walletKind;
     }
 
     public long getBalance() {
